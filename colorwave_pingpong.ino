@@ -1,4 +1,5 @@
 #include "FastLED.h"
+#include "Bounce2.h"	
 
 // ColorWavesWithPalettes
 // Animated shifting color waves, with several cross-fading color palettes.
@@ -22,6 +23,7 @@
 #define COLOR_ORDER GRB
 #define NUM_LEDS    100
 #define BRIGHTNESS  255
+#define switchA 3
 
 struct LEDStruct {
   CRGB strip[NUM_LEDS];
@@ -37,6 +39,20 @@ struct LEDStruct leds;
 // 20-120 is better for deployment
 #define SECONDS_PER_PALETTE 30
 
+// KY-040 Rotary Module variables
+int pinA = 21;
+int pinB = 22;
+int pinSW = 23;
+int lastPinSWstate = 1;
+int pinSWstate;
+int pinALast;
+int aVal;
+int rotateCount = 0;
+int rotary_function = 0;
+int palette_index;
+unsigned long lastDebounceTime = 0;
+unsigned long debounceDelay = 50;
+Bounce debouncer = Bounce();
 
 void setup() {
   delay(2000); // 3 second delay for recovery
@@ -50,6 +66,16 @@ void setup() {
   // set master brightness control
   FastLED.setBrightness(BRIGHTNESS);
 
+  // Set up switches
+  pinMode(switchA, INPUT_PULLUP);
+
+  // Set up rotary encoder
+  pinMode(pinA, INPUT);
+  pinMode(pinB, INPUT);
+  pinMode(pinSW, INPUT_PULLUP); // or pinMode(pinSW,INPUT); if I use the 10k resistor
+  pinALast = digitalRead(pinA);
+  debouncer.attach(pinSW);
+  debouncer.interval(100);
 
 // Forward declarations of an array of cpt-city gradient palettes, and 
 // a count of how many there are.  The actual color palette definitions
@@ -66,10 +92,17 @@ leds.gTargetPalette = gGradientPalettes[1] ;
 
 void loop()
 {
+
+
+
+  checkDial();
+
   EVERY_N_SECONDS( SECONDS_PER_PALETTE ) {
-    leds.gCurrentPaletteNumber = random8( 0, gGradientPaletteCount+1);
-    //leds.gCurrentPaletteNumber = addmod8( leds.gCurrentPaletteNumber, 1, gGradientPaletteCount);
-    leds.gTargetPalette = gGradientPalettes[ leds.gCurrentPaletteNumber ];
+	  if (digitalRead(switchA)) {
+		  leds.gCurrentPaletteNumber = random8(0, gGradientPaletteCount + 1);
+		  //leds.gCurrentPaletteNumber = addmod8( leds.gCurrentPaletteNumber, 1, gGradientPaletteCount);
+		  leds.gTargetPalette = gGradientPalettes[leds.gCurrentPaletteNumber];
+	  }
   }
 
   EVERY_N_MILLISECONDS(40) {
@@ -147,22 +180,102 @@ void colorwaves( LEDStruct& ledarray)
 //}
 
 
+void checkDial() {
+	//debouncer.update();
+	//if (debouncer.fell()) { pinSWstate = 0; }
+	//else { pinSWstate = 1; }
 
+	//if (!pinSWstate) {	// If pinSW was pressed, update what the dial does
+	//	rotary_function += 1;
+	//	if (rotary_function > 3) {	// If above max rotary modes, loop back to 0
+	//		rotary_function = 0;
+	//	}
+	//	//Serial.print("Button Function: ");	// Add back if we use Serial data again
+	//	//Serial.println(rotary_function);
+	//}
 
+	aVal = digitalRead(pinA);   // Read pinA
+	if ((aVal != pinALast)) {//&&(aVal==LOW)){      // If pinA has changed, update things.   Added the &&
+		rotateCount = !rotateCount;   // If at 0, change to 1... if at 1 change to 0 and don't update.
+		if (rotateCount) {    // Need to let it change twice
+			switch (rotary_function) {
 
-// Gradient Color Palette definitions for 33 different cpt-city color palettes.
-//    956 bytes of PROGMEM for all of the palettes together,
-//   +618 bytes of PROGMEM for gradient palette code (AVR).
-//  1,494 bytes total for all 34 color palettes and associated code.
+			case 0: // If button is in stage 0:  Increase or decrease mode based on case order
+				if (digitalRead(pinB) != aVal) {
+					leds.gCurrentPaletteNumber = addmod8(leds.gCurrentPaletteNumber, 1, gGradientPaletteCount);
+					leds.gTargetPalette = gGradientPalettes[leds.gCurrentPaletteNumber];
+				}
+				else {
+          if (leds.gCurrentPaletteNumber = 0){
+            leds.gCurrentPaletteNumber = gGradientPaletteCount;
+          }else{
+					  leds.gCurrentPaletteNumber = submod8(leds.gCurrentPaletteNumber, 1, gGradientPaletteCount);
+					  leds.gTargetPalette = gGradientPalettes[leds.gCurrentPaletteNumber];
+				  }
+				}
+				break;
 
-// From ColorWavesWithPalettes by Mark Kriegsman: https://gist.github.com/kriegsman/8281905786e8b2632aeb
+			//case 1: // If button is in stage 1:		Update palettes based on palette index 
+			//	if (digitalRead(pinB) != aVal) {
+			//		if (transitioning == 0) {
+			//			palette_change(actual_leds, 1);
+			//		}
+			//		else {
+			//			palette_change(new_leds, 1);
+			//			palette_change(old_leds, 1);
+			//		}
+			//	}
+			//	else {
+			//		if (transitioning == 0) {
+			//			palette_change(actual_leds, 0);
+			//		}
+			//		else {
+			//			palette_change(new_leds, 0);
+			//			palette_change(old_leds, 0);
+			//		}
+			//	}
+			//	Serial.print("Palette number: ");
+			//	Serial.println(palette_index);
+			//	break;
 
-// Gradient Color Palette definitions for 33 different cpt-city color palettes.
-//    956 bytes of PROGMEM for all of the palettes together,
-//   +618 bytes of PROGMEM for gradient palette code (AVR).
-//  1,494 bytes total for all 34 color palettes and associated code.
+			//case 2:		// If button is in stage 2:		Adjust delay speed   TODO: consider proportionally updating new and old speeds?
+			//	if (digitalRead(pinB) != aVal) {
+			//		if (transitioning > 0) {
+			//			delay_change(old_leds, 0);
+			//			delay_change(new_leds, 0);
+			//		}
+			//		else {
+			//			delay_change(actual_leds, 0);
+			//		}
+			//	}
+			//	else {
+			//		if (transitioning > 0) {
+			//			delay_change(old_leds, 1);
+			//			delay_change(old_leds, 1);
+			//		}
+			//		else {
+			//			delay_change(actual_leds, 1);
+			//		}
+			//	}
+			//	Serial.print("Delay: ");
+			//	Serial.println(actual_leds.this_delay);
+			//	break;
 
-// Gradient palette "ib_jul01_gp", originally from
-// http://soliton.vm.bytemark.co.uk/pub/cpt-city/ing/xmas/tn/ib_jul01.png.index.html
-// converted for FastLED with gammas (2.6, 2.2, 2.5)
-// Size: 16 bytes of program space.
+			//case 3:		// If button in stage 3:	Adjust brightness
+			//	if (digitalRead(pinB) != aVal) {
+			//		overall_bright++;
+			//	}
+			//	else {
+			//		overall_bright--;
+			//	}
+			//	constrain(overall_bright, 0, max_bright);
+			//	FastLED.setBrightness(overall_bright);
+			//	Serial.print("Brightness: ");
+			//	Serial.println(overall_bright);
+			//	break;
+
+			}
+		}
+	}
+	pinALast = aVal;
+}
