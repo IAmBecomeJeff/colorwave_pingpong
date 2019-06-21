@@ -17,12 +17,14 @@
 #endif
 #include "palettes.h"
 
+#define CPU_REBOOT (_reboot_Teensyduino_());
+
 #define DATA_PIN    7
 //#define CLK_PIN   14
 #define LED_TYPE    WS2812B
 #define COLOR_ORDER GRB
 #define NUM_LEDS    100
-#define BRIGHTNESS  255
+#define BRIGHTNESS  180
 #define switchA 3
 
 struct LEDStruct {
@@ -30,6 +32,7 @@ struct LEDStruct {
   CRGBPalette16 gCurrentPalette;
   CRGBPalette16 gTargetPalette;
   uint8_t gCurrentPaletteNumber; 
+  uint8_t start_index;
 };
 
 struct LEDStruct leds;
@@ -61,7 +64,8 @@ void setup() {
 //  FastLED.addLeds<LED_TYPE,DATA_PIN,CLK_PIN, COLOR_ORDER>(leds, NUM_LEDS)
   FastLED.addLeds<LED_TYPE,DATA_PIN, COLOR_ORDER>(leds.strip, NUM_LEDS)
     //.setCorrection(TypicalLEDStrip) // cpt-city palettes have different color balance
-    .setDither(BRIGHTNESS < 255);
+    //.setDither(BRIGHTNESS < 255);
+    .setDither(0);
 
   // set master brightness control
   FastLED.setBrightness(BRIGHTNESS);
@@ -92,9 +96,9 @@ leds.gTargetPalette = gGradientPalettes[1] ;
 
 void loop()
 {
-
-
-
+  EVERY_N_HOURS(2){
+    CPU_REBOOT
+  };
   checkDial();
 
   EVERY_N_SECONDS( SECONDS_PER_PALETTE ) {
@@ -108,8 +112,8 @@ void loop()
   EVERY_N_MILLISECONDS(40) {
     nblendPaletteTowardPalette( leds.gCurrentPalette, leds.gTargetPalette, 16);
   }
-  
-  colorwaves( leds );
+
+	colorwaves( leds );
 
   FastLED.show();
   FastLED.delay(20);
@@ -173,34 +177,38 @@ void colorwaves( LEDStruct& ledarray)
 // Alternate rendering function just scrolls the current palette 
 // across the defined LED strip.
 //void palettetest( CRGB* ledarray, uint16_t numleds, const CRGBPalette16& gCurrentPalette)
+//void palettetest(LEDStruct& leds)
 //{
-//  static uint8_t startindex = 0;
-//  startindex--;
-//  fill_palette( ledarray, numleds, startindex, (256 / NUM_LEDS) + 1, gCurrentPalette, 255, LINEARBLEND);
+//  //static uint8_t startindex = 0;
+//	for (uint8_t i = 0; i < NUM_LEDS; i++){
+//		leds.strip[i] = ColorFromPalette(leds.gCurrentPalette, (i + (leds.start_index * 2.5))%255,BRIGHTNESS, LINEARBLEND);
+//		leds.start_index++;
+//	    //fill_palette( leds.strip, NUM_LEDS, leds.start_index, (256 / NUM_LEDS) + 1, leds.gCurrentPalette, BRIGHTNESS, LINEARBLEND);
+//	}
 //}
 
 
 void checkDial() {
-	//debouncer.update();
-	//if (debouncer.fell()) { pinSWstate = 0; }
-	//else { pinSWstate = 1; }
+	debouncer.update();
+	if (debouncer.fell()) { pinSWstate = 0; }
+	else { pinSWstate = 1; }
 
-	//if (!pinSWstate) {	// If pinSW was pressed, update what the dial does
-	//	rotary_function += 1;
-	//	if (rotary_function > 3) {	// If above max rotary modes, loop back to 0
-	//		rotary_function = 0;
-	//	}
-	//	//Serial.print("Button Function: ");	// Add back if we use Serial data again
-	//	//Serial.println(rotary_function);
-	//}
+	if (!pinSWstate) {	// If pinSW was pressed, update what the dial does
+		rotary_function ++;
+		if (rotary_function > 1) {	// If above max rotary modes, loop back to 0
+			rotary_function = 0;
+		}
+		//Serial.print("Button Function: ");	// Add back if we use Serial data again
+		//Serial.println(rotary_function);
+	}
 
 	aVal = digitalRead(pinA);   // Read pinA
 	if ((aVal != pinALast)) {//&&(aVal==LOW)){      // If pinA has changed, update things.   Added the &&
 		rotateCount = !rotateCount;   // If at 0, change to 1... if at 1 change to 0 and don't update.
 		if (rotateCount) {    // Need to let it change twice
-			switch (rotary_function) {
+			//switch (rotary_function) {
 
-			case 0: // If button is in stage 0:  Increase or decrease mode based on case order
+//			case 0: // If button is in stage 0:  Increase or decrease mode based on case order
 				if (digitalRead(pinB) != aVal) {
 					leds.gCurrentPaletteNumber = addmod8(leds.gCurrentPaletteNumber, 1, gGradientPaletteCount);
 					leds.gTargetPalette = gGradientPalettes[leds.gCurrentPaletteNumber];
@@ -213,7 +221,7 @@ void checkDial() {
 					  leds.gTargetPalette = gGradientPalettes[leds.gCurrentPaletteNumber];
 				  }
 				}
-				break;
+//				break;
 
 			//case 1: // If button is in stage 1:		Update palettes based on palette index 
 			//	if (digitalRead(pinB) != aVal) {
@@ -274,7 +282,7 @@ void checkDial() {
 			//	Serial.println(overall_bright);
 			//	break;
 
-			}
+			//}
 		}
 	}
 	pinALast = aVal;
